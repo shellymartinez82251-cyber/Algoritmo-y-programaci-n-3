@@ -1,0 +1,257 @@
+#include <iostream>
+#include <vector>
+#include <algorithm>
+using namespace std;
+
+// ==================== DECLARACIÓN ADELANTE ====================
+class PolF2;
+
+// ==================== CLASE PolF1 (Por exponentes) ====================
+class PolF1 {
+private:
+    int grado;
+    vector<double> coef; // coef[exponente] = coeficiente
+
+public:
+    // Constructor
+    PolF1(int g = 0) : grado(g), coef(g + 1, 0.0) {}
+
+    // Obtener datos
+    int obtenerGrado() const { return grado; }
+    double obtenerCoeficiente(int exp) const {
+        if (exp < 0 || exp > grado) return 0.0;
+        return coef[exp];
+    }
+
+    // Asignar coeficiente
+    void asignarCoeficiente(int exp, double valor) {
+        if (exp < 0) return;
+        if (exp > grado) {
+            coef.resize(exp + 1, 0.0);
+            grado = exp;
+        }
+        coef[exp] = valor;
+        limpiarCeros();
+    }
+
+    // Eliminar ceros innecesarios
+    void limpiarCeros() {
+        while (grado > 0 && coef[grado] == 0) grado--;
+        coef.resize(grado + 1);
+    }
+
+    // Insertar término (suma si ya existe el exponente)
+    void insertar(int exp, double coe) {
+        double actual = obtenerCoeficiente(exp);
+        asignarCoeficiente(exp, actual + coe);
+    }
+
+    // Suma de polinomios
+    PolF1 sumar(const PolF1& otro) const {
+        int maxGrado = max(grado, otro.grado);
+        PolF1 resultado(maxGrado);
+        for (int i = 0; i <= maxGrado; i++) {
+            resultado.coef[i] = obtenerCoeficiente(i) + otro.obtenerCoeficiente(i);
+        }
+        resultado.limpiarCeros();
+        return resultado;
+    }
+
+    // Multiplicación
+    PolF1 multiplicar(const PolF1& otro) const {
+        PolF1 resultado(grado + otro.grado);
+        for (int i = 0; i <= grado; i++) {
+            if (coef[i] == 0) continue;
+            for (int j = 0; j <= otro.grado; j++) {
+                resultado.coef[i + j] += coef[i] * otro.coef[j];
+            }
+        }
+        resultado.limpiarCeros();
+        return resultado;
+    }
+
+    // División
+    PolF1 dividir(const PolF1& divisor) const {
+        if (divisor.grado == 0 && divisor.coef[0] == 0) {
+            cout << "ERROR: División por cero" << endl;
+            return PolF1();
+        }
+        PolF1 cociente(grado - divisor.grado);
+        PolF1 residuo = *this;
+
+        while (residuo.grado >= divisor.grado) {
+            int expDif = residuo.grado - divisor.grado;
+            double coefDif = residuo.coef[residuo.grado] / divisor.coef[divisor.grado];
+            cociente.asignarCoeficiente(expDif, coefDif);
+
+            for (int i = 0; i <= divisor.grado; i++) {
+                residuo.coef[expDif + i] -= coefDif * divisor.coef[i];
+            }
+            residuo.limpiarCeros();
+        }
+        cociente.limpiarCeros();
+        return cociente;
+    }
+
+    // Comparar con PolF2
+    bool sonIguales(const PolF2& otro) const;
+
+    // Mostrar
+    void mostrar() const {
+        for (int i = grado; i >= 0; i--) {
+            if (coef[i] == 0) continue;
+            if (i != grado && coef[i] > 0) cout << "+";
+            cout << coef[i];
+            if (i > 0) cout << "x^" << i;
+            cout << " ";
+        }
+        cout << endl;
+    }
+};
+
+// ==================== CLASE PolF2 (Por términos) ====================
+class PolF2 {
+private:
+    int n; // cantidad de términos
+    vector<int> vec; // [n, exp1, coef1, exp2, coef2, ...]
+
+public:
+    PolF2() : n(0) {}
+
+    int obtenerCantidad() const { return n; }
+    int obtenerExponente(int pos) const { return vec[1 + 2 * pos]; }
+    double obtenerCoeficiente(int pos) const { return vec[2 + 2 * pos]; }
+
+    // Conversión: PolF2 → PolF1
+    PolF1 aPolF1() const {
+        PolF1 res;
+        for (int i = 0; i < n; i++) {
+            int e = obtenerExponente(i);
+            double c = obtenerCoeficiente(i);
+            res.insertar(e, c);
+        }
+        return res;
+    }
+
+    // Conversión: PolF1 → PolF2
+    void desdePolF1(const PolF1& p1) {
+        n = 0;
+        vec.clear();
+        for (int i = p1.obtenerGrado(); i >= 0; i--) {
+            double c = p1.obtenerCoeficiente(i);
+            if (c != 0) {
+                vec.push_back(i);
+                vec.push_back(static_cast<int>(c));
+                n++;
+            }
+        }
+        vec.insert(vec.begin(), n);
+    }
+
+    // Agregar término directamente
+    void agregarTermino(int exp, double coef) {
+        vec.push_back(exp);
+        vec.push_back(static_cast<int>(coef));
+        n++;
+        vec[0] = n;
+    }
+
+    // Multiplicar PolF2 × PolF2
+    PolF2 multiplicar(const PolF2& otro) const {
+        PolF1 res = this->aPolF1().multiplicar(otro.aPolF1());
+        PolF2 resultado;
+        resultado.desdePolF1(res);
+        return resultado;
+    }
+
+    // Multiplicar PolF2 × PolF1
+    PolF1 multiplicar(const PolF1& otro) const {
+        return this->aPolF1().multiplicar(otro);
+    }
+
+    // Dividir PolF2 ÷ PolF2
+    PolF2 dividir(const PolF2& otro) const {
+        PolF1 res = this->aPolF1().dividir(otro.aPolF1());
+        PolF2 resultado;
+        resultado.desdePolF1(res);
+        return resultado;
+    }
+
+    // Comparar PolF2 == PolF2
+    bool sonIguales(const PolF2& otro) const {
+        return this->aPolF1().sonIguales(otro);
+    }
+
+    // Mostrar
+    void mostrar() const {
+        for (int i = 0; i < n; i++) {
+            int e = obtenerExponente(i);
+            double c = obtenerCoeficiente(i);
+            if (c == 0) continue;
+            if (i != 0 && c > 0) cout << "+";
+            cout << c;
+            if (e > 0) cout << "x^" << e;
+            cout << " ";
+        }
+        cout << endl;
+    }
+};
+
+// ==================== MÉTODO sonIguales (depende de PolF2) ====================
+bool PolF1::sonIguales(const PolF2& otro) const {
+    PolF1 temp = otro.aPolF1();
+    if (grado != temp.grado) return false;
+    for (int i = 0; i <= grado; i++) {
+        if (coef[i] != temp.coef[i]) return false;
+    }
+    return true;
+}
+
+// ==================== PROGRAMA PRINCIPAL ====================
+int main() {
+    cout << "=== PRUEBA DE POLINOMIOS ===" << endl << endl;
+
+    // --- PolF1 ---
+    cout << "--- Clase PolF1 ---" << endl;
+    PolF1 A, B;
+    A.insertar(4, 61);
+    A.insertar(3, -62);
+    A.insertar(0, -76);
+    cout << "A = "; A.mostrar();
+
+    B.insertar(2, 3);
+    B.insertar(1, 2);
+    B.insertar(0, 5);
+    cout << "B = "; B.mostrar();
+
+    PolF1 suma = A.sumar(B);
+    cout << "A+B = "; suma.mostrar();
+
+    PolF1 prod = A.multiplicar(B);
+    cout << "A×B = "; prod.mostrar();
+
+    PolF1 divi = A.dividir(B);
+    cout << "A÷B = "; divi.mostrar();
+
+    // --- PolF2 ---
+    cout << endl << "--- Clase PolF2 ---" << endl;
+    PolF2 C, D;
+    C.desdePolF1(A);
+    cout << "C (desde A) = "; C.mostrar();
+
+    D.desdePolF1(B);
+    cout << "D (desde B) = "; D.mostrar();
+
+    PolF2 prod2 = C.multiplicar(D);
+    cout << "C×D = "; prod2.mostrar();
+
+    PolF2 divi2 = C.dividir(D);
+    cout << "C÷D = "; divi2.mostrar();
+
+    // --- Comparaciones ---
+    cout << endl << "--- Comparaciones ---" << endl;
+    cout << "A == C? " << (A.sonIguales(C) ? "SI " : "NO ") << endl;
+    cout << "C == D? " << (C.sonIguales(D) ? "SI " : "NO ") << endl;
+
+    return 0;
+}
